@@ -1,92 +1,53 @@
-
 from flask import Flask, render_template_string, request, send_file
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
 import io
 
 app = Flask(__name__)
 
-# --- ELITE UI v0.4 (With Loading & Theme Support) ---
+# --- ELITE UI v0.4 ---
+# (Using the same HTML_TEMPLATE from our previous chat)
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Spektora | Premium Presentation Studio</title>
+    <title>Spektora | Premium Studio</title>
     <style>
         :root { --primary: #7000ff; --secondary: #00d4ff; --bg: #0b0e14; --card: #151921; --text: #ffffff; }
-        .light-theme { --bg: #f5f7fa; --card: #ffffff; --text: #1a1a1a; }
-        
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; transition: 0.4s; }
-        
-        /* Splash Screen Logic */
-        #loader { position: fixed; width: 100%; height: 100vh; background: var(--bg); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
-        .logo-glow { width: 80px; height: 80px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 30px var(--primary); animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { transform: scale(0.9); opacity: 0.7; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0.7; } }
-
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; }
         .sidebar { width: 320px; background: var(--card); height: 100vh; padding: 40px 25px; border-right: 1px solid rgba(255,255,255,0.1); }
-        .content { flex-grow: 1; padding: 60px; display: flex; justify-content: center; align-items: center; position: relative; }
-        
-        .theme-toggle { position: absolute; top: 20px; right: 20px; cursor: pointer; padding: 10px 20px; border-radius: 20px; background: var(--primary); color: white; border: none; font-weight: bold; }
-        
-        .glass-card { background: var(--card); padding: 40px; border-radius: 30px; border: 1px solid rgba(128,128,128,0.2); width: 100%; max-width: 600px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
-        h1 { font-size: 36px; margin-bottom: 5px; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
-        textarea, input, select { background: rgba(0,0,0,0.1); border: 1px solid rgba(128,128,128,0.3); color: var(--text); width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; }
+        .content { flex-grow: 1; padding: 60px; display: flex; justify-content: center; align-items: center; }
+        .glass-card { background: var(--card); padding: 40px; border-radius: 30px; border: 1px solid rgba(128,128,128,0.2); width: 100%; max-width: 600px; }
+        textarea, input, select { background: rgba(0,0,0,0.2); border: 1px solid rgba(128,128,128,0.3); color: white; width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; }
         .btn-generate { background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; border: none; padding: 20px; border-radius: 15px; cursor: pointer; font-size: 18px; font-weight: bold; width: 100%; margin-top: 10px; }
     </style>
 </head>
-<body id="body-tag">
-
-    <div id="loader">
-        <div class="logo-glow"></div>
-        <h2 style="margin-top: 20px;">Spark is building your deck...</h2>
-    </div>
-
+<body>
     <div class="sidebar">
         <h1>SPEKTORA</h1>
-        <button onclick="toggleTheme()" class="theme-toggle">🌓 Toggle Theme</button>
-        <div style="margin-top: 40px; padding: 15px; background: rgba(112,0,255,0.1); border-radius: 15px; font-size: 14px;">
-            <b>Spark Suggestion:</b><br>
-            <span id="ai-hint">"Paste some data points and I'll suggest the best chart!"</span>
-        </div>
+        <p>v0.4 Chart Engine</p>
     </div>
-
     <div class="content">
         <div class="glass-card">
-            <h1>Engine v0.4</h1>
-            <form action="/generate" method="post" onsubmit="showLoading()">
+            <form action="/generate" method="post">
                 <input type="text" name="title" placeholder="Presentation Topic" required>
                 <select name="format">
-                    <option value="official">🏢 Official</option>
-                    <option value="minimalist">☁️ Minimalist</option>
-                    <option value="artsy">🎨 Artsy</option>
+                    <option value="artsy">🎨 Artsy (Dark Mode)</option>
+                    <option value="official">🏢 Official (Clean)</option>
                 </select>
-                <textarea name="raw_info" rows="8" placeholder="Enter your data or notes..." onkeyup="checkData(this)"></textarea>
+                <textarea name="raw_info" rows="8" placeholder="Tip: Use 'Sales: 10, 20, 30' for a chart!" required></textarea>
                 <button type="submit" class="btn-generate">GENERATE</button>
             </form>
         </div>
     </div>
-
-    <script>
-        function toggleTheme() {
-            document.getElementById('body-tag').classList.toggle('light-theme');
-        }
-        function showLoading() {
-            document.getElementById('loader').style.display = 'flex';
-        }
-        function checkData(el) {
-            if(el.value.includes('%') || el.value.includes('total')) {
-                document.getElementById('ai-hint').innerHTML = "📊 I see statistics! Should I generate a Bar Chart slide for this?";
-            }
-        }
-    </script>
 </body>
 </html>
 '''
 
-# [Generate Route remains the same as v0.3 for now]
 @app.route('/')
 def home():
     return render_template_string(HTML_TEMPLATE)
@@ -96,13 +57,77 @@ def generate():
     title_text = request.form.get('title')
     raw_info = request.form.get('raw_info')
     style = request.form.get('format')
+    
     prs = Presentation()
+    
+    # 🎨 THEME SETTINGS
+    if style == "artsy":
+        bg_rgb, txt_rgb, accent_rgb = (15, 15, 20), (255, 255, 255), (112, 0, 255)
+    else:
+        bg_rgb, txt_rgb, accent_rgb = (255, 255, 255), (30, 30, 30), (0, 102, 204)
+
+    paragraphs = [p.strip() for p in raw_info.split('\n') if p.strip()]
+
+    # --- 1. TITLE SLIDE ---
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    # [Internal logic for PPTX generation here]
+    
+    # Paint Background
+    rect = slide.shapes.add_shape(1, 0, 0, prs.slide_width, prs.slide_height)
+    rect.fill.solid()
+    rect.fill.fore_color.rgb = RGBColor(*bg_rgb)
+    rect.line.fill.background()
+
+    # Add Title Text
+    title_box = slide.shapes.add_textbox(Inches(1), Inches(3), Inches(8), Inches(2))
+    p = title_box.text_frame.paragraphs[0]
+    p.text = title_text.upper()
+    p.font.size, p.font.bold = Pt(50), True
+    p.font.color.rgb = RGBColor(*accent_rgb)
+    p.alignment = PP_ALIGN.CENTER
+
+    # --- 2. CONTENT SLIDES ---
+    for para in paragraphs:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Paint Background again (crucial!)
+        rect = slide.shapes.add_shape(1, 0, 0, prs.slide_width, prs.slide_height)
+        rect.fill.solid()
+        rect.fill.fore_color.rgb = RGBColor(*bg_rgb)
+        rect.line.fill.background()
+
+        # Check for Chart Logic: "Label: 10, 20, 30"
+        if ":" in para and any(c.isdigit() for c in para):
+            try:
+                label, vals = para.split(":")
+                nums = [float(v.strip()) for v in vals.split(",")]
+                
+                chart_data = CategoryChartData()
+                chart_data.categories = [f"Item {i+1}" for i in range(len(nums))]
+                chart_data.add_series(label, tuple(nums))
+
+                chart = slide.shapes.add_chart(
+                    XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(1), Inches(1.5), Inches(8), Inches(4.5), chart_data
+                ).chart
+                # Style the chart title
+                slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(1)).text = label
+            except:
+                # Fallback to Text if Chart fails
+                tb = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(4))
+                tb.text_frame.text = para
+        else:
+            # REGULAR TEXT SLIDE
+            tb = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(5))
+            tf = tb.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.text = para
+            p.font.size = Pt(28)
+            p.font.color.rgb = RGBColor(*txt_rgb)
+
     output = io.BytesIO()
     prs.save(output)
     output.seek(0)
-    return send_file(output, as_attachment=True, download_name=f"Spektora_v04.pptx")
+    return send_file(output, as_attachment=True, download_name="Spektora_v04.pptx")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
