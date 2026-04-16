@@ -112,5 +112,11 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+import os # Add this at the very top of your file with other imports
+
+# ... (at the very bottom)
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # This line is the magic fix for Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
+    
